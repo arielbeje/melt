@@ -14,7 +14,11 @@ FLAKY_TEST_MAX_AGE_HOURS = FLAKY_TEST_MAX_AGE.total_seconds() / 3600
 IMPACTED_MERGE_REQUEST_SKIP_THRESHOLD = 3
 
 
-class MeltPlugin:
+class MeltLoggingPlugin:
+    """
+    Logs flaky test runs and updates the database.
+    """
+
     def __init__(self):
         # Global variable since we need to conserve state between hook calls
         self.rerun_tests = set()
@@ -44,30 +48,46 @@ class MeltPlugin:
 
     @pytest.hookimpl(trylast=True)
     def pytest_collection_modifyitems(self, items):
-        flaky_tests = list(get_flaky_tests(FLAKY_TEST_MAX_AGE))
-        node_id_to_test = {test.node_id: test for test in flaky_tests}
-
         for item in items:
             # `pytest_runtest_logreport` doesn't get items - we'll save them here for later
             self.test_items[item.nodeid] = item
 
-            if item.nodeid in node_id_to_test:
-                test = node_id_to_test[item.nodeid]
-                impacted_merge_requests = count_impacted_merge_requests(
-                    test, FLAKY_TEST_MAX_AGE
-                )
-                if impacted_merge_requests >= IMPACTED_MERGE_REQUEST_SKIP_THRESHOLD:
-                    item.add_marker(
-                        pytest.mark.skip(
-                            f"Flaky - impacted {impacted_merge_requests} merge requests "
-                            f"in the last {int(FLAKY_TEST_MAX_AGE_HOURS)} hours "
-                            f"(last update: {test.last_updated.isoformat(sep=' ', timespec='minutes')})"
-                        )
+
+class MeltSkippingPlugin:
+    """
+    Skipping flaky tests that impacted too many merge requests.
+    """
+
+    @pytest.hookimpl(trylast=True)
+    def pytest_collection_modifyitems(self, items):
+        flaky_tests = list(get_flaky_tests(FLAKY_TEST_MAX_AGE))
+        node_id_to_test = {test.node_id: test for test in flaky_tests}
+
+        for item in items:
+            if item.nodeid not in node_id_to_test:
+                # Not flaky
+                continue
+
+            test = node_id_to_test[item.nodeid]
+            impacted_merge_requests = count_impacted_merge_requests(
+                test, FLAKY_TEST_MAX_AGE
+            )
+
+            if impacted_merge_requests >= IMPACTED_MERGE_REQUEST_SKIP_THRESHOLD:
+                item.add_marker(
+                    pytest.mark.skip(
+                        f"Flaky - impacted {impacted_merge_requests} merge requests "
+                        f"in the last {int(FLAKY_TEST_MAX_AGE_HOURS)} hours "
+                        f"(last update: {test.last_updated.isoformat(sep=' ', timespec='minutes')})"
                     )
+                )
+
 
 
 def pytest_configure(config: PytestConfig) -> None:
+    config.pluginmanager.register(MeltSkippingPlugin(), "melt_skipping")
+
     if config.pluginmanager.has_plugin("rerunfailures"):
-        config.pluginmanager.register(MeltPlugin(), "melt")
+        config.pluginmanager.register(MeltLoggingPlugin(), "melt_logging")
     else:
         print("Warning: melt requires pytest-rerunfailures to be installed.")
