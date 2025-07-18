@@ -16,16 +16,14 @@ class MeltPlugin:
         self.test_items = {}
 
     def pytest_runtest_logreport(self, report):
-        # We don't care about setup/teardown
-        if report.when != "call":
-            return
-
-        if not hasattr(report, "rerun"):
+        if (
+            # We don't care about setup/teardown
+            report.when != "call"
             # We can't detect flaky tests when running without `--reruns`
-            return
-
-        if self.test_items[report.nodeid].get_closest_marker("flaky"):
+            or not hasattr(report, "rerun")
             # The test is properly marked as flaky - no need to log it
+            or self.test_items[report.nodeid].get_closest_marker("flaky")
+        ):
             return
 
         if report.rerun:
