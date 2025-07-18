@@ -1,0 +1,13 @@
+[project]
+name = "melt"
+version = "0.0.1"
+description = "Flaky tests logger"
+license = "MIT"
+classifiers = ["Framework :: Pytest"]
+dependencies = [
+    "peewee ~= 3.18",
+    "pytest-rerunfailures ~= 15.1",
+]
+
+[project.entry-points.pytest11]
+myproject = "melt.pytest_hooks"
