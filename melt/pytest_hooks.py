@@ -12,6 +12,8 @@ class MeltPlugin:
     def __init__(self):
         # Global variable since we need to conserve state between hook calls
         self.rerun_tests = set()
+        # Store tests to check for markers later
+        self.test_items = {}
 
     def pytest_runtest_logreport(self, report):
         # We don't care about setup/teardown
@@ -22,8 +24,10 @@ class MeltPlugin:
             # We can't detect flaky tests when running without `--reruns`
             return
 
-        # Note that this will also apply for tests that are marked with `@pytest.mark.flaky` -
-        # we rely on that not being used at all.
+        if self.test_items[report.nodeid].get_closest_marker("flaky"):
+            # The test is properly marked as flaky - no need to log it
+            return
+
         if report.rerun:
             self.rerun_tests.add(report.nodeid)
 
@@ -38,6 +42,9 @@ class MeltPlugin:
         }
 
         for item in items:
+            # `pytest_runtest_logreport` doesn't get items - we'll save them here for later
+            self.test_items[item.nodeid] = item
+
             if item.nodeid in flaky_node_ids:
                 # item.add_marker(pytest.mark.skip("Flaky"))
                 pass
