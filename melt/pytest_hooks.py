@@ -16,6 +16,10 @@ def pytest_runtest_logreport(report):
     if report.when != "call":
         return
 
+    if not hasattr(report, "rerun"):
+        # We can't detect flaky tests when running without `--reruns`
+        return
+
     if report.rerun:
         rerun_tests.add(report.nodeid)
 
