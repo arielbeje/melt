@@ -20,6 +20,8 @@ def pytest_runtest_logreport(report):
         # We can't detect flaky tests when running without `--reruns`
         return
 
+    # Note that this will also apply for tests that are marked with `@pytest.mark.flaky` -
+    # we rely on that not being used at all.
     if report.rerun:
         rerun_tests.add(report.nodeid)
 
