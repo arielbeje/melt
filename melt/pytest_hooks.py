@@ -21,8 +21,13 @@ class MeltPlugin:
             report.when != "call"
             # We can't detect flaky tests when running without `--reruns`
             or not hasattr(report, "rerun")
-            # The test is properly marked as flaky - no need to log it
-            or self.test_items[report.nodeid].get_closest_marker("flaky")
+            or (
+                # If not - the test was added after our `modifyitems` hook - we'll compromise and
+                # just say that it's not marked as flaky
+                report.nodeid in self.test_items
+                # The test is properly marked as flaky - no need to log it
+                and self.test_items[report.nodeid].get_closest_marker("flaky")
+            )
         ):
             return
 
