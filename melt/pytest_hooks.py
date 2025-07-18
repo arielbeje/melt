@@ -30,9 +30,7 @@ class MeltPlugin:
 
         if report.rerun:
             self.rerun_tests.add(report.nodeid)
-
-        # If the test passed, but had previous failures, it's flaky
-        if report.passed and report.nodeid in self.rerun_tests:
+        elif report.passed and report.nodeid in self.rerun_tests:
             log_flaky_test_run(report.nodeid)
 
     @pytest.hookimpl(trylast=True)
