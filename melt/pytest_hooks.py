@@ -3,9 +3,15 @@ import datetime
 import pytest
 from pytest import Config as PytestConfig
 
-from melt.flaky_test_db import get_flaky_tests, log_flaky_test_run
+from melt.flaky_test_db import (
+    count_impacted_merge_requests,
+    get_flaky_tests,
+    log_flaky_test_run,
+)
 
 FLAKY_TEST_UPDATED_THRESHOLD = datetime.timedelta(days=1)
+FLAKY_TEST_UPDATED_THRESHOLD_HOURS = FLAKY_TEST_UPDATED_THRESHOLD.total_seconds() / 3600
+IMPACTED_MERGE_REQUEST_SKIP_THRESHOLD = 3
 
 
 class MeltPlugin:
@@ -38,17 +44,26 @@ class MeltPlugin:
 
     @pytest.hookimpl(trylast=True)
     def pytest_collection_modifyitems(self, items):
-        flaky_node_ids = {
-            test.node_id for test in get_flaky_tests(FLAKY_TEST_UPDATED_THRESHOLD)
-        }
+        flaky_tests = list(get_flaky_tests(FLAKY_TEST_UPDATED_THRESHOLD))
+        node_id_to_test = {test.node_id: test for test in flaky_tests}
 
         for item in items:
             # `pytest_runtest_logreport` doesn't get items - we'll save them here for later
             self.test_items[item.nodeid] = item
 
-            if item.nodeid in flaky_node_ids:
-                # item.add_marker(pytest.mark.skip("Flaky"))
-                pass
+            if item.nodeid in node_id_to_test:
+                test = node_id_to_test[item.nodeid]
+                impacted_merge_requests = count_impacted_merge_requests(
+                    test, FLAKY_TEST_UPDATED_THRESHOLD
+                )
+                if impacted_merge_requests >= IMPACTED_MERGE_REQUEST_SKIP_THRESHOLD:
+                    item.add_marker(
+                        pytest.mark.skip(
+                            f"Flaky - impacted {impacted_merge_requests} merge requests "
+                            f"in the last {int(FLAKY_TEST_UPDATED_THRESHOLD_HOURS)} hours "
+                            f"(last update: {test.last_updated.isoformat(sep=' ', timespec='minutes')})"
+                        )
+                    )
 
 
 def pytest_configure(config: PytestConfig) -> None:

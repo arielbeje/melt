@@ -67,4 +67,14 @@ def log_flaky_test_run(nodeid: str) -> None:
     FlakyTestRun.create(test=test, commit_hash="fefef")
 
 
+def count_impacted_merge_requests(test: FlakyTest, max_age: datetime.timedelta) -> int:
+    after = datetime.datetime.now() - max_age
+    return (
+        FlakyTestRun.select()
+        .where(FlakyTestRun.test == test and FlakyTestRun.timestamp >= after)
+        .group_by(FlakyTestRun.mr_id)
+        .count()
+    )
+
+
 db.create_tables((FlakyTest, FlakyTestRun))
